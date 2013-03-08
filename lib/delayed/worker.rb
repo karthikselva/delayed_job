@@ -198,10 +198,16 @@ module Delayed
       return [success, failure]
     end
 
+    def destroy_with_log(job)
+      #TODO: Implement DelayedJobAudit ActiveRecord
+      DelayedJobAudit.create(job.clone)
+      job.destroy
+    end 
+
     def run(job)
       runtime =  Benchmark.realtime do
         Timeout.timeout(self.class.max_run_time.to_i, WorkerTimeout) { job.invoke_job }
-        job.destroy
+        destroy_with_log job
       end
       say "#{job.name} completed after %.4f" % runtime
       return true  # did work
@@ -230,7 +236,7 @@ module Delayed
     def failed(job)
       self.class.lifecycle.run_callbacks(:failure, self, job) do
         job.hook(:failure)
-        self.class.destroy_failed_jobs ? job.destroy : job.fail!
+        self.class.destroy_failed_jobs ? destroy_with_log(job) : job.fail!
       end
     end
 
